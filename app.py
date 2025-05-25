@@ -109,7 +109,7 @@ def download_models_from_drive():
                 logging.info(f"Downloading {os.path.basename(model_path)} from Google Drive...")
                 
                 session_drive = requests.Session()
-                response = session_drive.get(url, stream=True, allow_redirects=True, timeout=300)
+                response = session_drive.get(url, stream=True, allow_redirects=True, timeout=180)
                 
                 if 'download_warning' in response.text or 'virus scan warning' in response.text:
                     logging.info("Google Drive requires confirmation, extracting token...")
@@ -131,7 +131,7 @@ def download_models_from_drive():
                     
                     if confirm_token:
                         confirm_url = f"{url}&confirm={confirm_token}"
-                        response = session_drive.get(confirm_url, stream=True, allow_redirects=True, timeout=300)
+                        response = session_drive.get(confirm_url, stream=True, allow_redirects=True, timeout=180)
                         logging.info("Made confirmed request to Google Drive")
                 
                 response.raise_for_status()
@@ -167,8 +167,6 @@ def download_models_from_drive():
         logging.error(f"Failed to download models from Google Drive: {e}")
         return False
 
-# Replace your try_load_models() function with this version that skips downloads for testing:
-
 def try_load_models():
     global road_model, vehicle_model, USE_MOCK_DATA
     
@@ -176,13 +174,6 @@ def try_load_models():
         logging.info("=== Attempting to load ML models ===")
         logging.info("🔍 DEBUG: About to call download_models_from_drive()")
         
-        # TEMPORARILY SKIP DOWNLOAD FOR TESTING
-        logging.info("⏭️ DEBUG: SKIPPING MODEL DOWNLOAD FOR TESTING")
-        USE_MOCK_DATA = True
-        logging.info("🤖 DEBUG: Models skipped, using mock data mode")
-        return
-        
-        # This code below won't run now - we'll re-enable it later
         download_success = download_models_from_drive()
         logging.info(f"📥 DEBUG: download_models_from_drive() returned: {download_success}")
         
@@ -191,8 +182,37 @@ def try_load_models():
             USE_MOCK_DATA = True
             return
         
-        # ... rest of the function stays the same
+        road_model_path = "models/unet_road_segmentation.Better.keras"
+        vehicle_model_path = "models/unet_multi_classV1.keras"
         
+        logging.info(f"📁 DEBUG: Checking if {road_model_path} exists: {os.path.exists(road_model_path)}")
+        logging.info(f"📁 DEBUG: Checking if {vehicle_model_path} exists: {os.path.exists(vehicle_model_path)}")
+        
+        if os.path.exists(road_model_path) and os.path.exists(vehicle_model_path):
+            logging.info("Model files found, attempting to load...")
+            
+            def dice_loss(y_true, y_pred, smooth=1e-6):
+                y_true_f = tf.keras.backend.flatten(y_true)
+                y_pred_f = tf.keras.backend.flatten(y_pred)
+                intersection = tf.keras.backend.sum(y_true_f * y_pred_f)
+                return 1 - ((2. * intersection + smooth) / (tf.keras.backend.sum(y_true_f) + tf.keras.backend.sum(y_pred_f) + smooth))
+            
+            logging.info("🤖 DEBUG: Loading road segmentation model...")
+            road_model = tf.keras.models.load_model(road_model_path, custom_objects={"dice_loss": dice_loss})
+            logging.info("✓ Road model loaded")
+            
+            logging.info("🚗 DEBUG: Loading vehicle classification model...")
+            vehicle_model = tf.keras.models.load_model(vehicle_model_path, custom_objects={"dice_loss": dice_loss})
+            logging.info("✓ Vehicle model loaded")
+            
+            USE_MOCK_DATA = False
+            logging.info("=== ✓ REAL MODELS LOADED SUCCESSFULLY ===")
+            logging.info("Switching to real camera processing mode")
+            
+        else:
+            logging.info("❌ DEBUG: Model files not found after download, using mock data mode")
+            USE_MOCK_DATA = True
+            
     except Exception as e:
         logging.error(f"💥 DEBUG: Exception in try_load_models: {e}")
         import traceback
@@ -389,22 +409,34 @@ def get_status():
         "last_update": last_update_time
     })
 
+# ===================================================================
+# INITIALIZATION (MOVED OUT OF __main__ BLOCK FOR RAILWAY/GUNICORN)
+# ===================================================================
+
+logging.info("🚀 DEBUG: Starting application initialization...")
+
+# Initialize critical densities
+logging.info("🔧 DEBUG: Initializing critical densities...")
+initialize_critical_densities()
+
+# Try to load models
+logging.info("🤖 DEBUG: About to call try_load_models()...")
+try_load_models()
+logging.info(f"🤖 DEBUG: After try_load_models(), USE_MOCK_DATA = {USE_MOCK_DATA}")
+logging.info(f"🤖 DEBUG: road_model is None: {road_model is None}")
+logging.info(f"🤖 DEBUG: vehicle_model is None: {vehicle_model is None}")
+
+# Start background thread
+logging.info("🧵 DEBUG: Starting background processor...")
+background_thread = threading.Thread(target=background_processor, daemon=True)
+background_thread.start()
+logging.info("✓ Background processor started")
+
+logging.info("🎉 DEBUG: Application initialization complete!")
+
+# For local development
 if __name__ == '__main__':
-    logging.info("=== HCMC Traffic Density API Starting ===")
-    logging.info("🚀 DEBUG: Application starting up...")
-    
-    initialize_critical_densities()
-    
-    logging.info("🤖 DEBUG: About to call try_load_models()...")
-    try_load_models()
-    logging.info(f"🤖 DEBUG: After try_load_models(), USE_MOCK_DATA = {USE_MOCK_DATA}")
-    logging.info(f"🤖 DEBUG: road_model is None: {road_model is None}")
-    logging.info(f"🤖 DEBUG: vehicle_model is None: {vehicle_model is None}")
-    
-    thread = threading.Thread(target=background_processor, daemon=True)
-    thread.start()
-    logging.info("✓ Background processor started")
-    
+    logging.info("=== Running in local development mode ===")
     port = int(os.environ.get('PORT', 5000))
     logging.info(f"✓ API ready on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
