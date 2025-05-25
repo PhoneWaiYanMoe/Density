@@ -185,7 +185,7 @@ def try_load_models():
         logging.info("=== Attempting to load ML models ===")
         
         # First try to download models
-        download_success = download_models_from_github()
+        download_success = download_models_from_drive()
         
         if not download_success:
             logging.info("Model download failed, using mock data mode")
