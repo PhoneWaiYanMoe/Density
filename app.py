@@ -167,6 +167,8 @@ def download_models_from_drive():
         logging.error(f"Failed to download models from Google Drive: {e}")
         return False
 
+# Replace your try_load_models() function with this version that skips downloads for testing:
+
 def try_load_models():
     global road_model, vehicle_model, USE_MOCK_DATA
     
@@ -174,6 +176,13 @@ def try_load_models():
         logging.info("=== Attempting to load ML models ===")
         logging.info("🔍 DEBUG: About to call download_models_from_drive()")
         
+        # TEMPORARILY SKIP DOWNLOAD FOR TESTING
+        logging.info("⏭️ DEBUG: SKIPPING MODEL DOWNLOAD FOR TESTING")
+        USE_MOCK_DATA = True
+        logging.info("🤖 DEBUG: Models skipped, using mock data mode")
+        return
+        
+        # This code below won't run now - we'll re-enable it later
         download_success = download_models_from_drive()
         logging.info(f"📥 DEBUG: download_models_from_drive() returned: {download_success}")
         
@@ -182,37 +191,8 @@ def try_load_models():
             USE_MOCK_DATA = True
             return
         
-        road_model_path = "models/unet_road_segmentation.Better.keras"
-        vehicle_model_path = "models/unet_multi_classV1.keras"
+        # ... rest of the function stays the same
         
-        logging.info(f"📁 DEBUG: Checking if {road_model_path} exists: {os.path.exists(road_model_path)}")
-        logging.info(f"📁 DEBUG: Checking if {vehicle_model_path} exists: {os.path.exists(vehicle_model_path)}")
-        
-        if os.path.exists(road_model_path) and os.path.exists(vehicle_model_path):
-            logging.info("Model files found, attempting to load...")
-            
-            def dice_loss(y_true, y_pred, smooth=1e-6):
-                y_true_f = tf.keras.backend.flatten(y_true)
-                y_pred_f = tf.keras.backend.flatten(y_pred)
-                intersection = tf.keras.backend.sum(y_true_f * y_pred_f)
-                return 1 - ((2. * intersection + smooth) / (tf.keras.backend.sum(y_true_f) + tf.keras.backend.sum(y_pred_f) + smooth))
-            
-            logging.info("🤖 DEBUG: Loading road segmentation model...")
-            road_model = tf.keras.models.load_model(road_model_path, custom_objects={"dice_loss": dice_loss})
-            logging.info("✓ Road model loaded")
-            
-            logging.info("🚗 DEBUG: Loading vehicle classification model...")
-            vehicle_model = tf.keras.models.load_model(vehicle_model_path, custom_objects={"dice_loss": dice_loss})
-            logging.info("✓ Vehicle model loaded")
-            
-            USE_MOCK_DATA = False
-            logging.info("=== ✓ REAL MODELS LOADED SUCCESSFULLY ===")
-            logging.info("Switching to real camera processing mode")
-            
-        else:
-            logging.info("❌ DEBUG: Model files not found after download, using mock data mode")
-            USE_MOCK_DATA = True
-            
     except Exception as e:
         logging.error(f"💥 DEBUG: Exception in try_load_models: {e}")
         import traceback
