@@ -567,4 +567,5 @@ if __name__ == '__main__':
     # Start Flask
     port = int(os.environ.get('PORT', 5000))
     logging.info(f"✓ API ready on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)#   F o r c e   r e d e p l o y  
+ 
